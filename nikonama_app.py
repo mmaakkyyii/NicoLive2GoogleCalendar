@@ -1,26 +1,124 @@
+from __future__ import print_function
+import datetime
+import pickle
+import os.path
+from googleapiclient.discovery import build
+from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.transport.requests import Request
+
 import sys
 import requests
 import urllib.parse
 import csv
 
-data=[]
-filename='data.csv'
-with open(filename, newline='',encoding="utf-8_sig") as csvfile:
-	spamreader = csv.reader(csvfile, delimiter=',', quotechar='|')
-	for row in spamreader:
-		data.append(row)
-		print(', '.join(row))
 
-for i in range(len(data)):
+# If modifying these scopes, delete the file token.pickle.
+SCOPES = ['https://www.googleapis.com/auth/calendar']
+
+def get_calendar(cakendar_url):
+    creds = None
+    # The file token.pickle stores the user's access and refresh tokens, and is
+    # created automatically when the authorization flow completes for the first
+    # time.
+    if os.path.exists('token/token.pickle'):
+        with open('token/token.pickle', 'rb') as token:
+            creds = pickle.load(token)
+    # If there are no (valid) credentials available, let the user log in.
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file(
+                'credentials.json', SCOPES)
+            creds = flow.run_local_server(port=0)
+        # Save the credentials for the next run
+        with open('token/token.pickle', 'wb') as token:
+            pickle.dump(creds, token)
+
+    service = build('calendar', 'v3', credentials=creds)
+
+    # Call the Calendar API
+    timefrom=datetime.datetime.now().isoformat()+'Z'
+    timeto= (datetime.datetime.now() + datetime.timedelta(days=60))
+    timeto=timeto.isoformat()+'Z'
+    print(timefrom)
+    print(timeto)
+    events_result = service.events().list(calendarId=cakendar_url,
+                                        timeMin=timefrom,
+                                        timeMax=timeto,
+                                        singleEvents=True,
+                                        orderBy='startTime').execute()
+    events = events_result.get('items', [])
+
+    result=[]
+
+    if not events:
+        print('No upcoming events found.')
+    for event in events:
+        start = event['start'].get('dateTime', event['start'].get('date'))
+        start = datetime.datetime.strptime(start[:-6], '%Y-%m-%dT%H:%M:%S')
+        print(event)
+        print(start, event['summary'])
+        url=event['description']
+        contentID=url[-11:]
+        result.append(contentID)
+        print(contentID)
+        print(event['start']['dateTime'])
+        print(event['end']['dateTime'])
+
+    return result
+
+
+
+def add_event(title,contentId,start_time,end_time,cakendar_url):
+    creds = None
+    # The file token.pickle stores the user's access and refresh tokens, and is
+    # created automatically when the authorization flow completes for the first
+    # time.
+    if os.path.exists('token/token.pickle'):
+        with open('token/token.pickle', 'rb') as token:
+            creds = pickle.load(token)
+    # If there are no (valid) credentials available, let the user log in.
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file(
+                'credentials.json', SCOPES)
+            creds = flow.run_local_server(port=0)
+        # Save the credentials for the next run
+        with open('token/token.pickle', 'wb') as token:
+            pickle.dump(creds, token)
+
+    service = build('calendar', 'v3', credentials=creds)
+
+    event = {
+      'summary': title,
+      'location': '',
+      'description': 'https://live2.nicovideo.jp/watch/'+contentId,
+      'start': {
+        'dateTime': start_time,
+        'timeZone': 'Japan',
+      },
+      'end': {
+        'dateTime': end_time,
+        'timeZone': 'Japan',
+      },
+    }
+
+    event = service.events().insert(calendarId=cakendar_url,
+                                    body=event).execute()
+
+
+def get_nicolive(data):#name,channelID,targets,q
 	nicolive_API_endpoint="https://api.search.nicovideo.jp/api/v2/live/contents/search"
 #	print(data[i][0])
-
-	q_=data[i][3]
+	q_=data[3]
 	q=urllib.parse.quote(q_)
-	targets=data[i][2]
+	targets=data[2]
 
-	fields='contentId,channelId,title,startTime,liveEndTime'
-	filters_channelId='&filters[channelId][0]='+str(data[i][1])
+	fields='contentId,channelId,title,startTime,liveEndTime,description'
+	filters_channelId='&filters[channelId][0]='+str(data[1])
 	filters_liveStatus='&filters[liveStatus][0]=reserved' #enum('past','onair','reserved')
 
 	_sort='-startTime'
@@ -31,16 +129,42 @@ for i in range(len(data)):
 
 	#print(url)
 	r = requests.get(url)
-	res=r.json()
-	#print(res)
-	try:
-		num=(len(res['data']))
-		for i in res['data']:
-			print(i['title'],end=',')
-			a=i['startTime']
-			print(a,end=',')
-			print(i['liveEndTime'])
-	except KeyError:
-		print(res['meta'])
-		print("KeyError")
+	#print(r.json())
+	return r.json()
 
+def main():
+	filename='channel_list/channel_list.csv'
+	channel_list=[]
+	with open(filename, newline='',encoding="utf-8_sig") as csvfile:
+		spamreader = csv.reader(csvfile, delimiter=',', quotechar='|')
+		for row in spamreader:
+			channel_list.append(row)
+			print(', '.join(row))
+
+
+	MY_CALENDAR=''
+	with open('url/MY_CALENDAR_URL.txt', 'r') as cal:
+		MY_CALENDAR=str(cal.read())
+		print(MY_CALENDAR)
+
+	scheduled_contentID=get_calendar(MY_CALENDAR)
+	print(scheduled_contentID)
+
+	for ls in channel_list:
+		print(ls)
+		schedule=get_nicolive(ls)
+		try:
+			for s in schedule['data']:
+				print(s['title'],s['contentId'],s['startTime'],s['liveEndTime'])
+				if (s['contentId'] in scheduled_contentID):
+					print(s['contentId'],end=' is alreay exist.\n')
+				else:
+					print('add contents')
+					add_event(s['title'],s['contentId'],s['startTime'],s['liveEndTime'],MY_CALENDAR)
+		except KeyError:
+			print(res['meta'])
+			print("KeyError")
+
+
+if __name__ =='__main__':
+	main()
