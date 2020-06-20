@@ -66,7 +66,6 @@ def get_calendar(calendar_url):
 				print(start, event['summary'])
 			url=event['description']
 			contentID=url[-11:]
-			print(contentID)
 			result.append(contentID)
 			if DEBUG==True:
 				print(contentID)
@@ -140,6 +139,27 @@ def get_nicolive(data):#name,channelID,targets,q
 	#print(r.json())
 	return r.json()
 
+def get_nicolive_from_title(title):#title of live
+	nicolive_API_endpoint="https://api.search.nicovideo.jp/api/v2/live/contents/search"
+	q=title
+	targets='title'
+
+	fields='contentId,channelId,title,startTime,liveEndTime,description'
+	filters_channelId=''
+	filters_liveStatus='&filters[liveStatus][0]=reserved' #enum('past','onair','reserved')
+
+	_sort='-startTime'
+	_context='nico live to google calender'
+	_limit=str(10)
+
+	url=nicolive_API_endpoint+'?q='+q+'&targets='+targets+'&fields='+fields+filters_channelId+filters_liveStatus+'&_sort='+_sort+'&_context='+_context+'&_limit='+_limit
+
+	#print(url)
+	r = requests.get(url)
+	#print(r.json())
+	return r.json()
+
+
 def main():
 	filename='channel_list/channel_list.csv'
 	channel_list=[]
@@ -168,9 +188,9 @@ def main():
 		try:
 			for s in schedule['data']:
 				if (s['contentId'] in scheduled_contentID):
-					print(' -',s['contentId'],s['title'],s['contentId'],s['startTime'],s['liveEndTime'])
+					print(' -',s['contentId'],s['title'],s['startTime'],s['liveEndTime'])
 				else:
-					print(' @',s['contentId'],s['title'],s['contentId'],s['startTime'],s['liveEndTime'])
+					print(' @',s['contentId'],s['title'],s['startTime'],s['liveEndTime'])
 					add_event(s['title'],s['contentId'],s['startTime'],s['liveEndTime'],MY_CALENDAR)
 		except KeyError:
 			print(res['meta'])
@@ -178,4 +198,28 @@ def main():
 
 
 if __name__ =='__main__':
-	main()
+	args = sys.argv
+	if len(args)==1:
+		main()
+	elif len(args)==2:
+		MY_CALENDAR=''
+		with open('url/MY_CALENDAR_URL.txt', 'r') as cal:
+			MY_CALENDAR=str(cal.read())
+			if DEBUG==True:
+				print(MY_CALENDAR)
+		scheduled_contentID=get_calendar(MY_CALENDAR)
+		if DEBUG==True:
+			print(scheduled_contentID)
+
+		print(args[1])
+		schedule=get_nicolive_from_title(args[1])
+		try:
+			for s in schedule['data']:
+				if (s['contentId'] in scheduled_contentID):
+					print(' -',s['contentId'],s['title'],s['startTime'],s['liveEndTime'])
+				else:
+					print(' @',s['contentId'],s['title'],s['startTime'],s['liveEndTime'])
+					add_event(s['title'],s['contentId'],s['startTime'],s['liveEndTime'],MY_CALENDAR)
+		except KeyError:
+			print(res['meta'])
+			print("KeyError")
