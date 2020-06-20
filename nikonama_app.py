@@ -10,6 +10,8 @@ import sys
 import requests
 import urllib.parse
 import csv
+from urllib import request
+from bs4 import BeautifulSoup
 
 DEBUG = False
 
@@ -144,7 +146,7 @@ def get_nicolive_from_title(title):#title of live
 	q=title
 	targets='title'
 
-	fields='contentId,channelId,title,startTime,liveEndTime,description'
+	fields='contentId,channelId,title,startTime,liveEndTime'
 	filters_channelId=''
 	filters_liveStatus='&filters[liveStatus][0]=reserved' #enum('past','onair','reserved')
 
@@ -159,8 +161,7 @@ def get_nicolive_from_title(title):#title of live
 	#print(r.json())
 	return r.json()
 
-
-def main():
+def init():
 	filename='channel_list/channel_list.csv'
 	channel_list=[]
 	with open(filename, newline='',encoding="utf-8_sig") as csvfile:
@@ -170,12 +171,19 @@ def main():
 			if DEBUG==True:
 				print(', '.join(row))
 
-
 	MY_CALENDAR=''
 	with open('url/MY_CALENDAR_URL.txt', 'r') as cal:
 		MY_CALENDAR=str(cal.read())
 		if DEBUG==True:
 			print(MY_CALENDAR)
+	setting=[channel_list,MY_CALENDAR]
+	return setting
+
+
+def main():
+	setting=init()
+	channel_list=setting[0]
+	MY_CALENDAR=setting[1]
 
 	scheduled_contentID=get_calendar(MY_CALENDAR)
 	if DEBUG==True:
@@ -193,8 +201,37 @@ def main():
 					print(' @',s['contentId'],s['title'],s['startTime'],s['liveEndTime'])
 					add_event(s['title'],s['contentId'],s['startTime'],s['liveEndTime'],MY_CALENDAR)
 		except KeyError:
-			print(res['meta'])
+			print(schedule['meta'])
 			print("KeyError")
+
+def add_non_registered_schedule(title):
+	setting=init()
+	channel_list=setting[0]
+	MY_CALENDAR=setting[1]
+
+	scheduled_contentID=get_calendar(MY_CALENDAR)
+	if DEBUG==True:
+		print(scheduled_contentID)
+
+	schedule=get_nicolive_from_title(title)
+	if DEBUG==True:
+		print(schedule)
+	try:
+		data=schedule['data'][0];
+		if (data['contentId'] in scheduled_contentID):
+			print(' -',data['contentId'],data['title'],data['startTime'],data['liveEndTime'])
+		else:
+			print(' @',data['contentId'],data['title'],data['startTime'],data['liveEndTime'])
+			add_event(data['title'],data['contentId'],data['startTime'],data['liveEndTime'],MY_CALENDAR)
+	except KeyError:
+		print(schedule['meta'])
+		print("KeyError")
+
+def usage():
+	print('.py            | nomal')
+	print('.py -d         | debug on')
+	print('.py -u \'url\' | add schedule of the url')
+	print('.py -d \'url\' | add schedule of the url with debug')
 
 
 if __name__ =='__main__':
@@ -202,24 +239,31 @@ if __name__ =='__main__':
 	if len(args)==1:
 		main()
 	elif len(args)==2:
-		MY_CALENDAR=''
-		with open('url/MY_CALENDAR_URL.txt', 'r') as cal:
-			MY_CALENDAR=str(cal.read())
-			if DEBUG==True:
-				print(MY_CALENDAR)
-		scheduled_contentID=get_calendar(MY_CALENDAR)
-		if DEBUG==True:
-			print(scheduled_contentID)
+		option=args[1]
+		if option == '-d':
+			DEBUG=True
+			main()
+		else:
+			usage()
+	elif len(args)==3:
+		option=args[1]
+		url=args[2]
+		if option=='-u':
+			r=request.urlopen(url)
+			soup=BeautifulSoup(r,'html.parser')
+			title=soup.find('p',class_='___title___1aYd0').span.text
+			print(title)
+			add_non_registered_schedule(title)
+		elif option=='-d':
+			DEBUG=True
+			r=request.urlopen(url)
+			soup=BeautifulSoup(r,'html.parser')
+			title=soup.find('p',class_='___title___1aYd0').span.text
+			print(title)
+			add_non_registered_schedule(title)
+		else:
+			usage()
+	else:
+		usage()
 
-		print(args[1])
-		schedule=get_nicolive_from_title(args[1])
-		try:
-			for s in schedule['data']:
-				if (s['contentId'] in scheduled_contentID):
-					print(' -',s['contentId'],s['title'],s['startTime'],s['liveEndTime'])
-				else:
-					print(' @',s['contentId'],s['title'],s['startTime'],s['liveEndTime'])
-					add_event(s['title'],s['contentId'],s['startTime'],s['liveEndTime'],MY_CALENDAR)
-		except KeyError:
-			print(res['meta'])
-			print("KeyError")
+
