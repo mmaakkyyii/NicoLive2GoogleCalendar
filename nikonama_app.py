@@ -16,9 +16,13 @@ from datetime import datetime, timezone, timedelta
 
 DEBUG = False
 
+
+######### Google Calendar ######################################
+
 # If modifying these scopes, delete the file token.pickle.
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 
+#return liveId list
 def get_calendar(calendar_url):
 	creds = None
 	# The file token.pickle stores the user's access and refresh tokens, and is
@@ -45,8 +49,6 @@ def get_calendar(calendar_url):
 	timefrom=datetime.now().isoformat()+'+09:00'
 	timeto= (datetime.now() + timedelta(days=60))
 	timeto=timeto.isoformat()+'+09:00'
-	print("start time to get calendar: ",end="")
-	print(timefrom)
 	if DEBUG==True:
 		print("start time to get calendar: ",end="")
 		print(timefrom)
@@ -72,7 +74,6 @@ def get_calendar(calendar_url):
 				print(event)
 				print(start, event['summary'])
 			live_id=event['location']
-			print(live_id)
 			result.append(live_id)
 			if DEBUG==True:
 				print(contentID)
@@ -85,7 +86,7 @@ def get_calendar(calendar_url):
 '''
 title:カレンダーのタイトル[str]
 description:説明 URLなど[str]
-stat_time end_time:開始終了時間[datetime.datetime]
+start_time end_time:開始終了時間[datetime.datetime]
 '''
 def add_event(title,live_id,description,start_time,end_time,calendar_url):
 	start_time=datetime.strftime(start_time, '%Y-%m-%dT%H:%M:%S')
@@ -128,33 +129,200 @@ def add_event(title,live_id,description,start_time,end_time,calendar_url):
 
 	event = service.events().insert(calendarId=calendar_url,body=event).execute()
 
+
+
+##############################################################################3
+
+
+class Program_info:
+	def __init__(self,live_id,title,start,end):
+		self.title=title
+		self.live_id=live_id
+		self.start_time=start
+		self.end_time=end
+
+
+class Platform:
+	def __init__(self,url,list_path):
+		self.calendar_url=url
+		self.channel_list=self.get_channel_list(list_path)
+		self.scheduled_contentID_list=get_calendar(self.calendar_url)
+		if DEBUG==True:
+			print(self.scheduled_contentID_list)
+	
+	def check_id_in_list(self,live_id):
+		if str(live_id) in self.scheduled_contentID_list:
+			return False
+		else:
+			return True
+	
+	def update(self):
+		program_list=[]
+		for channel_search_info in self.channel_list:
+			for l in self.get_from_api(channel_search_info):
+				self.check_and_add(l)
+
+
+	def check_and_add(self,live_info):
+		if self.check_id_in_list(live_info.live_id):
+			print(' @',live_info.live_id,live_info.title,live_info.start_time,live_info.end_time)
+			self.add_event(live_info.live_id,live_info.title,live_info.start_time,live_info.end_time)
+		else:
+			print(' -',live_info.live_id,live_info.title,live_info.start_time,live_info.end_time)
+	
+	def get_channel_list(self,list_path):
+		pass
+
+	def get_from_api(self,channel_info):
+		pass
+
+
+	def add_event(self,live_id,title,start_time,end_time):
+		print("pppp")
+		add_to_calendar(title,live_id,live_id,start_time,end_time)
+
+	def add_to_calendar(self,title,live_id,description,start_time,end_time):
+		start_time=datetime.strftime(start_time, '%Y-%m-%dT%H:%M:%S')
+		end_time=datetime.strftime(end_time, '%Y-%m-%dT%H:%M:%S')
+
+		creds = None
+		# The file token.pickle stores the user's access and refresh tokens, and is
+		# created automatically when the authorization flow completes for the first
+		# time.
+		if os.path.exists('token/token.pickle'):
+			with open('token/token.pickle', 'rb') as token:
+				creds = pickle.load(token)
+		# If there are no (valid) credentials available, let the user log in.
+		if not creds or not creds.valid:
+			if creds and creds.expired and creds.refresh_token:
+				creds.refresh(Request())
+			else:
+				flow = InstalledAppFlow.from_client_secrets_file(
+					'credentials.json', SCOPES)
+				creds = flow.run_local_server(port=0)
+			# Save the credentials for the next run
+			with open('token/token.pickle', 'wb') as token:
+				pickle.dump(creds, token)
+
+		service = build('calendar', 'v3', credentials=creds)
+
+		event = {
+			'summary': title,
+			'location': live_id,
+			'description': description,
+			'start': {
+				'dateTime': start_time,
+				'timeZone': 'Japan',
+			},
+			'end': {
+			'dateTime': end_time,
+			'timeZone': 'Japan',
+			},
+		}
+
+		event = service.events().insert(calendarId=self.calendar_url,body=event).execute()
+
+class NicoLive(Platform):
+	def add_event(self,live_id,title,start_time,end_time):
+		self.add_to_calendar(title,live_id,'https://live2.nicovideo.jp/watch/'+live_id,start_time,end_time)
+	
+	def get_from_api(self,channel_info):#name,channelID,targets,q
+		nicolive_API_endpoint="https://api.search.nicovideo.jp/api/v2/live/contents/search"
+	#	print(data[i][0])
+		q_=channel_info[3]
+		q=urllib.parse.quote(q_)
+		targets=channel_info[2]
+
+		fields='contentId,channelId,title,startTime,liveEndTime,description'
+		filters_channelId='&filters[channelId][0]='+str(channel_info[1])
+		filters_liveStatus='&filters[liveStatus][0]=reserved' #enum('past','onair','reserved')
+
+		_sort='-startTime'
+		_context='nico live to google calendar'
+		_limit=str(60)
+
+		url=nicolive_API_endpoint+'?q='+q+'&targets='+targets+'&fields='+fields+filters_channelId+filters_liveStatus+'&_sort='+_sort+'&_context='+_context+'&_limit='+_limit
+
+		res = requests.get(url).json()
+		program_info_list=[]
+		if res['meta']['totalCount']>0:
+			for r in res['data']:
+				start_time=datetime.strptime(r['startTime'], '%Y-%m-%dT%H:%M:%S%z')
+				end_time=datetime.strptime(r['liveEndTime'], '%Y-%m-%dT%H:%M:%S%z')
+				program_info_list.append(Program_info(r['contentId'],r['title'],start_time,end_time))
+
+		return program_info_list
+
+	
+	def get_channel_list(self,list_path):
+		nicolive_channel_list=[]
+		with open(list_path, newline='',encoding="utf-8_sig") as csvfile:
+			spamreader = csv.reader(csvfile, delimiter=',', quotechar='|')
+			for row in spamreader:
+				nicolive_channel_list.append(row)
+				if DEBUG==True:
+					print(', '.join(row))
+		return nicolive_channel_list
+
+
+class LineLive(Platform):
+	def add_event(self,live_id,title,start_time,end_time):
+		self.add_to_calendar(title,live_id,live_id,start_time,end_time)
+
+	def get_from_api(self,channel_info):
+		program_info_list=[]
+		url = 'https://live-api.line-apps.com/web/v4.0/channel/'+channel_info;
+		res = requests.get(url).json()
+
+		if DEBUG==True:
+			print(res['upcomings'])
+		try:
+			for r in res['upcomings']['rows']:
+				start_time=datetime.fromtimestamp(r['startAt'],timezone(timedelta(hours=9)))
+				finish_time=datetime.fromtimestamp(r['finishAt'],timezone(timedelta(hours=9)))
+				program_info_list.append(Program_info(r['id'],r['title'],start_time,finish_time))
+
+				if DEBUG==True:
+					print('title:',end='')
+					print(title);
+					print('startAt:',end='')
+					print(start_time)
+					print('finishAt:',end='')
+					print(finish_time)
+
+			return program_info_list
+		except:
+			return None
+
+	def get_channel_list(self,list_path):
+		linelive_channel_list=[]
+		with open(list_path, newline='',encoding="utf-8_sig") as csvfile:
+			spamreader = csv.reader(csvfile, delimiter=',', quotechar='|')
+			for row in spamreader:
+				linelive_channel_list.append(row[1])
+				if DEBUG==True:
+					print(', '.join(row))
+		return linelive_channel_list
+
+
+
+class YoutubeLive(Platform):
+	def add_event(self,live_id,title,start_time,end_time):
+		self.add_to_calendar(title,live_id,contentId,start_time,end_time)
+
+class YoutubeLive(Platform):
+	def add_event(self,live_id,title,start_time,end_time):
+		self.add_to_calendar(title,live_id,contentId,start_time,end_time)
+
+
+
+
 def add_linelive_event(title,contentId,start_time,end_time,calendar_url):
 	add_event(title,contentId,contentId,start_time,end_time,calendar_url)
 
 def add_nicolive_event(title,contentId,start_time,end_time,calendar_url):
 	add_event(title,contentId,'https://live2.nicovideo.jp/watch/'+contentId,start_time,end_time,calendar_url)
 
-def get_nicolive(data):#name,channelID,targets,q
-	nicolive_API_endpoint="https://api.search.nicovideo.jp/api/v2/live/contents/search"
-#	print(data[i][0])
-	q_=data[3]
-	q=urllib.parse.quote(q_)
-	targets=data[2]
-
-	fields='contentId,channelId,title,startTime,liveEndTime,description'
-	filters_channelId='&filters[channelId][0]='+str(data[1])
-	filters_liveStatus='&filters[liveStatus][0]=reserved' #enum('past','onair','reserved')
-
-	_sort='-startTime'
-	_context='nico live to google calender'
-	_limit=str(60)
-
-	url=nicolive_API_endpoint+'?q='+q+'&targets='+targets+'&fields='+fields+filters_channelId+filters_liveStatus+'&_sort='+_sort+'&_context='+_context+'&_limit='+_limit
-
-	#print(url)
-	r = requests.get(url)
-	#print(r.json())
-	return r.json()
 
 def get_nicolive_from_title(title):#title of live
 	nicolive_API_endpoint="https://api.search.nicovideo.jp/api/v2/live/contents/search"
@@ -166,7 +334,7 @@ def get_nicolive_from_title(title):#title of live
 	filters_liveStatus='&filters[liveStatus][0]=reserved' #enum('past','onair','reserved')
 
 	_sort='-startTime'
-	_context='nico live to google calender'
+	_context='nico live to google calendar'
 	_limit=str(10)
 
 	url=nicolive_API_endpoint+'?q='+q+'&targets='+targets+'&fields='+fields+filters_channelId+filters_liveStatus+'&_sort='+_sort+'&_context='+_context+'&_limit='+_limit
@@ -174,7 +342,10 @@ def get_nicolive_from_title(title):#title of live
 	#print(url)
 	r = requests.get(url)
 	#print(r.json())
-	return r.json()
+	program_info_list=Program_info([],[],[],[])
+	for r_json in r.json():
+		program_info_list.append(Program_info(r_json['contentId'],r_json['title'],r_json['startTime'],r_json['liveEndTime']))
+	return program_info_list
 
 def get_LINE_LIVE(ch_id):#data[live_id,title,start,end]
 	url = 'https://live-api.line-apps.com/web/v4.0/channel/'+ch_id;
@@ -222,8 +393,8 @@ def init():
 			linelive_channel_list.append(row[1])
 			if DEBUG==True:
 				print(', '.join(row))
-	print(nicolive_channel_list)
-	print(linelive_channel_list)
+	#print(nicolive_channel_list)
+	#print(linelive_channel_list)
 
 	MY_CALENDAR=''
 	with open('url/MY_CALENDAR_URL.txt', 'r') as cal:
@@ -233,6 +404,22 @@ def init():
 
 	setting=[MY_CALENDAR,nicolive_channel_list,linelive_channel_list]
 	return setting
+
+def get_my_calendar():
+	with open('url/MY_CALENDAR_URL.txt', 'r') as cal:
+		MY_CALENDAR=str(cal.read())
+		if DEBUG==True:
+			print(MY_CALENDAR)
+		return MY_CALENDAR
+
+def main2():
+	MY_CALENDAR=get_my_calendar()
+
+	nicolive = NicoLive(MY_CALENDAR,'channel_list/nicolive_channel_list.csv')
+	linelive = LineLive(MY_CALENDAR,'channel_list/linelive_channel_list.csv')
+
+	nicolive.update()
+	linelive.update()
 
 
 def main():
@@ -324,10 +511,9 @@ if __name__ =='__main__':
 		if option == '-d':
 			DEBUG=True
 			main()
-		if option == '-l':
-			DEBUG=True
-			linelive_schedule=get_LINE_LIVE('4785540')
-			#title,contentId,start_time,end_time,calendar_url
+		elif option == '-2':
+			DEBUG=False
+			main2()
 		else:
 			usage()
 	elif len(args)==3:
