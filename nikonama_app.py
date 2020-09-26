@@ -141,6 +141,9 @@ class Program_info:
 		self.start_time=start
 		self.end_time=end
 
+	def show(self):
+		print('title:'+str(self.title)+'live_id:'+str(self.live_id)+'start:'+str(self.start_time)+'end:'+str(self.end_time))
+
 
 class Platform:
 	def __init__(self,url,list_path):
@@ -252,6 +255,29 @@ class NicoLive(Platform):
 				program_info_list.append(Program_info(r['contentId'],r['title'],start_time,end_time))
 
 		return program_info_list
+
+	def get_live_from_url(self,title):
+		nicolive_API_endpoint="https://api.search.nicovideo.jp/api/v2/live/contents/search"
+		q=title
+		targets='title'
+
+		fields='contentId,channelId,title,startTime,liveEndTime'
+		filters_channelId=''
+		filters_liveStatus='&filters[liveStatus][0]=reserved' #enum('past','onair','reserved')
+
+		_sort='-startTime'
+		_context='nico live to google calendar'
+		_limit=str(1)
+
+		url=nicolive_API_endpoint+'?q='+q+'&targets='+targets+'&fields='+fields+filters_channelId+filters_liveStatus+'&_sort='+_sort+'&_context='+_context+'&_limit='+_limit
+
+		#print(url)
+		res = requests.get(url)
+		r=res.json()['data'][0]
+		start_time=datetime.strptime(r['startTime'], '%Y-%m-%dT%H:%M:%S%z')
+		end_time=datetime.strptime(r['liveEndTime'], '%Y-%m-%dT%H:%M:%S%z')
+		return Program_info(r['contentId'],r['title'],start_time,end_time)
+
 
 	
 	def get_channel_list(self,list_path):
@@ -490,8 +516,6 @@ def add_non_registered_schedule(title):
 		print(schedule['meta'])
 		print("KeyError")
 
-	linelive_schedule=get_LINE_LIVE('4785540')
-	add_linelive_event(linelive_schedule['live_id'],linelive_schedule['title'],linelive_schedule['start_time'],linelive_schedule['finish_time'],MY_CALENDAR)
 
 
 def usage():
@@ -521,12 +545,15 @@ if __name__ =='__main__':
 		url=args[2]
 
 		if option=='-u':
+			MY_CALENDAR=get_my_calendar()
+			nicolive = NicoLive(MY_CALENDAR,'channel_list/nicolive_channel_list.csv')
+
 			r=request.urlopen(url)
 			soup=BeautifulSoup(r,'html.parser')
 			title=soup.find('p',class_='___title___1aYd0').span.text
 			print(title)
-			add_non_registered_schedule(title)
-		if option=='-y':
+			nicolive.check_and_add(nicolive.get_live_from_url(title))
+		elif option=='-y':
 			r=request.urlopen(url)
 			soup=BeautifulSoup(r,'html.parser')
 			title=soup.find_all(content='title')
