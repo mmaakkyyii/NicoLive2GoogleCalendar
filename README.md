@@ -5,9 +5,12 @@
 googleカレンダー連携に必要なtokenは '''token/token.pickle'''に置く
 
 ## channel_listについて
-'''/channel_list/channel_list.csv'''は
+'''/channel_list/nicolive_list.csv'''はニコニコチャンネルのリストで
 名前,チャンネルID,target(tags,title),検索ワード
 となるようにする
+```/channel_list/linelive_list.csv```はラインライブのリストで
+LINELIVEのID
+をチャンネルごとに改行する
 
 ## MY_CALENDAR_URLについて
 '''url/MY_CALENDAR_URL.txt'''は
