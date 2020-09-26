@@ -45,9 +45,9 @@ def get_calendar(calendar_url):
 	service = build('calendar', 'v3', credentials=creds)
 
 	# Call the Calendar API
-	timefrom=datetime.now().isoformat()+TIMZEZONE
+	timefrom=datetime.now().isoformat()+TIMEZONE
 	timeto= (datetime.now() + timedelta(days=60))
-	timeto=timeto.isoformat()+TIMZEZONE
+	timeto=timeto.isoformat()+TIMEZONE
 	if DEBUG==True:
 		print("start time to get calendar: ",end="")
 		print(timefrom)
