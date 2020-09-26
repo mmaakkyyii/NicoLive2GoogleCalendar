@@ -86,7 +86,7 @@ title:カレンダーのタイトル[str]
 description:説明 URLなど[str]
 start_time end_time:開始終了時間[datetime.datetime]
 '''
-def add_event(title,live_id,description,start_time,end_time,calendar_url):
+def add_event_to_Google_Calendar(live_id,title,description,start_time,end_time,calendar_url):
 	start_time=datetime.strftime(start_time, '%Y-%m-%dT%H:%M:%S')
 	end_time=datetime.strftime(end_time, '%Y-%m-%dT%H:%M:%S')
 
@@ -126,8 +126,6 @@ def add_event(title,live_id,description,start_time,end_time,calendar_url):
 	}
 
 	event = service.events().insert(calendarId=calendar_url,body=event).execute()
-
-
 
 ##############################################################################3
 
@@ -177,55 +175,14 @@ class Platform:
 	def get_from_api(self,channel_info):
 		pass
 
-
 	def add_event(self,live_id,title,start_time,end_time):
-		print("pppp")
-		add_to_calendar(title,live_id,live_id,start_time,end_time)
+		print("in platfrom")
+		add_event_to_Google_Calendar(live_id,title,live_id,start_time,end_time,self.calendar_url)
 
-	def add_to_calendar(self,title,live_id,description,start_time,end_time):
-		start_time=datetime.strftime(start_time, '%Y-%m-%dT%H:%M:%S')
-		end_time=datetime.strftime(end_time, '%Y-%m-%dT%H:%M:%S')
-
-		creds = None
-		# The file token.pickle stores the user's access and refresh tokens, and is
-		# created automatically when the authorization flow completes for the first
-		# time.
-		if os.path.exists('token/token.pickle'):
-			with open('token/token.pickle', 'rb') as token:
-				creds = pickle.load(token)
-		# If there are no (valid) credentials available, let the user log in.
-		if not creds or not creds.valid:
-			if creds and creds.expired and creds.refresh_token:
-				creds.refresh(Request())
-			else:
-				flow = InstalledAppFlow.from_client_secrets_file(
-					'credentials.json', SCOPES)
-				creds = flow.run_local_server(port=0)
-			# Save the credentials for the next run
-			with open('token/token.pickle', 'wb') as token:
-				pickle.dump(creds, token)
-
-		service = build('calendar', 'v3', credentials=creds)
-
-		event = {
-			'summary': title,
-			'location': live_id,
-			'description': description,
-			'start': {
-				'dateTime': start_time,
-				'timeZone': 'Japan',
-			},
-			'end': {
-			'dateTime': end_time,
-			'timeZone': 'Japan',
-			},
-		}
-
-		event = service.events().insert(calendarId=self.calendar_url,body=event).execute()
 
 class NicoLive(Platform):
 	def add_event(self,live_id,title,start_time,end_time):
-		self.add_to_calendar(title,live_id,'https://live2.nicovideo.jp/watch/'+live_id,start_time,end_time)
+		add_event_to_Google_Calendar(live_id,title,'https://live2.nicovideo.jp/watch/'+live_id,start_time,end_time,self.calendar_url)
 	
 	def get_from_api(self,channel_info):#name,channelID,targets,q
 		nicolive_API_endpoint="https://api.search.nicovideo.jp/api/v2/live/contents/search"
@@ -275,8 +232,6 @@ class NicoLive(Platform):
 		start_time=datetime.strptime(r['startTime'], '%Y-%m-%dT%H:%M:%S%z')
 		end_time=datetime.strptime(r['liveEndTime'], '%Y-%m-%dT%H:%M:%S%z')
 		return Program_info(r['contentId'],r['title'],start_time,end_time)
-
-
 	
 	def get_channel_list(self,list_path):
 		nicolive_channel_list=[]
@@ -291,7 +246,7 @@ class NicoLive(Platform):
 
 class LineLive(Platform):
 	def add_event(self,live_id,title,start_time,end_time):
-		self.add_to_calendar(title,live_id,live_id,start_time,end_time)
+		add_event_to_Google_Calendar(live_id,title,live_id,start_time,end_time,self.calendar_url)
 
 	def get_from_api(self,channel_info):
 		program_info_list=[]
@@ -334,11 +289,7 @@ class LineLive(Platform):
 
 class YoutubeLive(Platform):
 	def add_event(self,live_id,title,start_time,end_time):
-		self.add_to_calendar(title,live_id,contentId,start_time,end_time)
-
-class YoutubeLive(Platform):
-	def add_event(self,live_id,title,start_time,end_time):
-		self.add_to_calendar(title,live_id,contentId,start_time,end_time)
+		add_event_to_Google_Calendar(live_id,title,live_id,start_time,end_time,self.calendar_url)
 
 
 def get_my_calendar():
