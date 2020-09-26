@@ -13,6 +13,7 @@ from bs4 import BeautifulSoup
 from datetime import datetime, timezone, timedelta
 
 DEBUG = False
+TIMEZONE = '+09:00'
 
 
 ######### Google Calendar ######################################
@@ -44,9 +45,9 @@ def get_calendar(calendar_url):
 	service = build('calendar', 'v3', credentials=creds)
 
 	# Call the Calendar API
-	timefrom=datetime.now().isoformat()+'+09:00'
+	timefrom=datetime.now().isoformat()+TIMZEZONE
 	timeto= (datetime.now() + timedelta(days=60))
-	timeto=timeto.isoformat()+'+09:00'
+	timeto=timeto.isoformat()+TIMZEZONE
 	if DEBUG==True:
 		print("start time to get calendar: ",end="")
 		print(timefrom)
